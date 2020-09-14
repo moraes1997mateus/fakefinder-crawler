@@ -1,30 +1,20 @@
 package tracker
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/tc-teams/fakefinder-crawler/tracker/crawl"
+	"github.com/tc-teams/fakefinder-crawler/tracker/crawler"
 )
 
 func WebCrawlerNews() error {
 
-	cl := crawl.NewCrawler()
-
-	err, related := cl.TrackNewsBasedOnCovid19()
+	g1 := crawler.NewG1()
+	g1.TrackNewsBasedOnCovid19()
+	err := g1.LoggingDocuments()
 	if err != nil {
 		return err
 	}
 
-	for index, news := range related {
+	//TODO implements logs about any sites
 
-		logrus.WithFields(logrus.Fields{
-			"Url":      news.Url,
-			"Date":     news.Date,
-			"Title":    news.Title,
-			"SubTitle": news.Subtitle,
-			"Body":     news.Body,
-		}).Warn("News related:",index)
-
-	}
 	return nil
 
 }

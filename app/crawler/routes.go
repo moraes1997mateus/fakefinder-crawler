@@ -2,12 +2,15 @@ package crawler
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/tc-teams/fakefinder-crawler/api"
 	"github.com/tc-teams/fakefinder-crawler/elastic"
+	"github.com/tc-teams/fakefinder-crawler/elastic/es"
+	"github.com/tc-teams/fakefinder-crawler/external"
 	"github.com/tc-teams/fakefinder-crawler/tracker"
-	"github.com/tc-teams/fakefinder-crawler/tracker/crawl"
 	"net/http"
+	"time"
 )
 
 const routerName = "crawler"
@@ -30,19 +33,9 @@ func Init() *api.Route {
 	return r
 }
 
-func CrawlNewsRelatedToCovid(w http.ResponseWriter, r *http.Request) *api.BaseError {
-	var information crawl.Info
+func CrawlNewsRelatedToCovid(w http.ResponseWriter, r *http.Request, log *api.Logging) *api.BaseError {
 
-	err := json.NewDecoder(r.Body).Decode(&information)
-	if err != nil {
-		return &api.BaseError{
-			Error:   err,
-			Message: "Invalid request body",
-			Code:    http.StatusBadRequest,
-		}
-	}
-
-	err = tracker.WebCrawlerNews()
+	err := tracker.WebCrawlerNews()
 	if err != nil {
 		return &api.BaseError{
 			Error:   err,
@@ -50,6 +43,10 @@ func CrawlNewsRelatedToCovid(w http.ResponseWriter, r *http.Request) *api.BaseEr
 			Code:    http.StatusNotFound,
 		}
 	}
+	log.WithFields(logrus.Fields{
+		"WebCrawler": "Search news success",
+	}).Info()
+
 	return &api.BaseError{
 		Error:   nil,
 		Message: "OK",
@@ -58,9 +55,21 @@ func CrawlNewsRelatedToCovid(w http.ResponseWriter, r *http.Request) *api.BaseEr
 
 }
 
-func ElasticCrawlByDescription(w http.ResponseWriter, r *http.Request) *api.BaseError {
 
-	documents, err := elastic.ElasticDocumentsByDescription()
+func ElasticCrawlByDescription(w http.ResponseWriter, r *http.Request, log *api.Logging) *api.BaseError {
+
+	var info es.Info
+
+	err := json.NewDecoder(r.Body).Decode(&info)
+	if err != nil {
+		return &api.BaseError{
+			Error:   err,
+			Message: "Invalid request body",
+			Code:    http.StatusBadRequest,
+		}
+	}
+
+	documents, err := elastic.DocumentsByDescription(log, info.Description)
 	if err != nil {
 		return &api.BaseError{
 			Error:   err,
@@ -69,26 +78,41 @@ func ElasticCrawlByDescription(w http.ResponseWriter, r *http.Request) *api.Base
 		}
 	}
 
-	for index, news := range documents {
-
-		logrus.WithFields(logrus.Fields{
-			"Url":      news.Url,
-			"Date":     news.Date,
-			"Title":    news.Title,
-			"SubTitle": news.Subtitle,
-			"Body":     news.Body,
-		}).Warn("News related:", index)
+	if documents == nil {
+		return &api.BaseError{
+			Error:   err,
+			Message: "No data found",
+			Code:    http.StatusNotFound,
+		}
 
 	}
-//var (
-	//	request http.Request
-	//	result []
-	//)
-	//
-	//err = external.NewClient().Request(&request,result)
+	reqBody := &external.BotRequest{
+		Description: info.Description,
+	}
+
+	for _, related := range documents {
+		reqBody.Related = append(reqBody.Related, related.News.Body)
+	}
+	fmt.Println("quantidade:",len(reqBody.Related))
+	time.Sleep(10*time.Second)
+
+
+	for q, i := range reqBody.Related{
+		fmt.Printf("Documents%s: %s",q,i)
+
+	}
+
+
+
+	//related, err := external.NewClient().Request(reqBody)
 	//if err != nil {
-	//	return err
+	//	return &api.BaseError{
+	//		Error:   err,
+	//		Message: "error request a external service",
+	//		Code:    http.StatusBadGateway,
+	//	}
 	//}
+	//fmt.Println(related)
 
 	return &api.BaseError{
 		Error:   nil,
