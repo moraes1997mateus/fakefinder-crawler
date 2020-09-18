@@ -2,12 +2,12 @@ package crawler
 
 import (
 	"errors"
-	"fmt"
 	"github.com/gocolly/colly"
 	"github.com/sirupsen/logrus"
 	"github.com/tc-teams/fakefinder-crawler/api"
 	ctx "github.com/tc-teams/fakefinder-crawler/context/validator"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -19,7 +19,7 @@ type G1 struct {
 	Colly     *colly.Collector
 	News      []RelatedNews
 	validator *ctx.Validation
-	Log      *api.Logging
+	Log       *api.Logging
 }
 
 //LoadNews returns related crawler by an entry
@@ -29,7 +29,6 @@ func (g *G1) TrackNewsBasedOnCovid19() {
 	g.Colly.OnHTML("#bstn-launcher a[href]", func(e *colly.HTMLElement) {
 		if !stop {
 			e.Request.Visit(e.Attr("href"))
-			detailsNews.Url = e.Attr("href")
 		}
 
 	})
@@ -47,7 +46,7 @@ func (g *G1) TrackNewsBasedOnCovid19() {
 
 	})
 	g.Colly.OnHTML("main", func(e *colly.HTMLElement) {
-		e.ForEach("p", func(_ int, el *colly.HTMLElement) {
+		e.ForEach(".content-text__container", func(_ int, el *colly.HTMLElement) {
 			text := el.Text
 			detailsNews.Body += text
 
@@ -66,15 +65,34 @@ func (g *G1) TrackNewsBasedOnCovid19() {
 		if detailsNews.Date.IsZero() {
 			detailsNews.Date = time
 		}
-		if err := g.validator.ValidateStruct(detailsNews); err != nil {
+		hasNotice, err := g.validator.ValidateStruct(detailsNews)
+
+		if err != nil {
+			detailsNews = RelatedNews{}
 			return
 		}
-		g.News = append(g.News, detailsNews)
-		detailsNews.Body = ""
+
+		for _, re := range g.News {
+			if re.Title == detailsNews.Title {
+				hasNotice = false
+				break
+
+			}
+		}
+		if hasNotice {
+			detailsNews.Url = e.Request.AbsoluteURL(e.Request.URL.Path)
+			g.News = append(g.News, detailsNews)
+		}
+
+		if len(g.News) == 5 {
+			stop = true
+			return
+		}
+		detailsNews = RelatedNews{}
 
 	})
 
-	g.Colly.Limit(&colly.LimitRule{Parallelism: 3, RandomDelay: 1 * time.Second})
+	g.Colly.Limit(&colly.LimitRule{RandomDelay: 1 * time.Second})
 
 	g.Colly.Visit(StartG1)
 	g.Colly.Wait()
@@ -90,11 +108,10 @@ func (g *G1) LoggingDocuments(log *api.Logging) error {
 
 	for index, news := range g.News {
 		s := space.ReplaceAllString(news.Body, " ")
-		fmt.Println("ola")
 		log.WithFields(logrus.Fields{
 			"Url":      news.Url,
 			"Date":     news.Time,
-			"Title":    news.Title,
+			"Title":    strings.ToLower(news.Title),
 			"SubTitle": news.Subtitle,
 			"Body":     s,
 		}).Info("News related:", index)
@@ -106,7 +123,9 @@ func (g *G1) LoggingDocuments(log *api.Logging) error {
 //NewG1 return crawler  instance of colly
 func NewG1() Crawler {
 	return &G1{
-		Colly:     colly.NewCollector(colly.AllowedDomains(Folha, GB, Uol)),
+		Colly: colly.NewCollector(colly.AllowedDomains(GB), colly.URLFilters(
+			regexp.MustCompile(FilterGB),
+		)),
 		News:      []RelatedNews{},
 		validator: ctx.NewValidate(),
 	}

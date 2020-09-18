@@ -32,7 +32,6 @@ func Init() *api.Route {
 
 func CrawlNewsRelatedToCovid(w http.ResponseWriter, r *http.Request, log *api.Logging) *api.BaseError {
 
-
 	err := tracker.WebCrawlerNews(log)
 	if err != nil {
 		return &api.BaseError{
@@ -114,7 +113,7 @@ func ElasticCrawlByDescription(w http.ResponseWriter, r *http.Request, log *api.
 	for _, j := range documents {
 		var text external.TextResult
 
-		if body := pln.PlnProcess[j.News.Body]; body != "" {
+		if body := pln.PlnProcess[j.News.Body]; body != empty {
 			text.Similarity = body
 			text.Link = j.News.Url
 			text.Title = j.News.Title
@@ -129,9 +128,15 @@ func ElasticCrawlByDescription(w http.ResponseWriter, r *http.Request, log *api.
 		"pln": "external process successfully completed",
 	}).Info()
 
-	bytes, err := json.Marshal(bot)
-	w.Write(bytes)
-
+	err = json.NewEncoder(w).Encode(bot)
+	if err != nil {
+		return &api.BaseError{
+			Error:   err,
+			Message: "Was not possible to encode bot crawler response",
+			Code:    http.StatusBadRequest,
+		}
+	}
+	w.WriteHeader(http.StatusOK)
 	return nil
 
 }

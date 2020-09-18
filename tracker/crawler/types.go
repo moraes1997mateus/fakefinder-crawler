@@ -1,6 +1,8 @@
 package crawler
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	GB         = "g1.globo.com"
@@ -9,6 +11,8 @@ const (
 	StartFolha = "https://www1.folha.uol.com.br/cotidiano/coronavirus/"
 	StartG1    = "https://g1.globo.com/bemestar/coronavirus/"
 	StartUol   = "https://noticias.uol.com.br/coronavirus/"
+
+	FilterGB = "https://g1.globo\\.com/(bemestar.+)$"
 )
 
 //RelatedNews is used to describe article model.
